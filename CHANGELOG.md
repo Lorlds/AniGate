@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.1.1
+
+- Added PolyForm Noncommercial License 1.0.0 and documented AniGate as
+  source-available, noncommercial software rather than OSI-approved open source.
+- Made publish confirmation tokens one-time use for `publish.branch` and
+  `publish.pr_create`.
+- Redacted credential-bearing remote URLs from external command error text.
+- Removed a full credential-URL-shaped test fixture from source text while
+  keeping redaction coverage.
+
+## 0.1.0
+
+- Added Max-only `file.edit_apply` for explicit direct Web GPT single-file
+  edits when no configured agent should be used.
+- Added `task.commit_preview` and `task.commit` so task worktrees can be
+  committed before publish.
+- Made `publish.preview` reject dirty task worktrees and point callers to the
+  commit flow.
+- Added `gate.doctor` and extended `project.preflight` with structured checks.
+- Preserved business `next` actions when artifact follow-up actions are added.
+- Hardened HTTP startup by requiring auth tokens for non-loopback listeners and
+  added stricter server timeouts.
+- Tightened new AniGate state, log, artifact, task, handoff, and session file
+  permissions.
+
 ## 0.0.1.280626
 
 - Added artifact-backed large output handling with `artifact.list`,

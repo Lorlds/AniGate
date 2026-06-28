@@ -1,10 +1,15 @@
 # AniGate
 
-Version: `0.0.1.280626` (`0.0.1.DDMMYY`)
+Version: `0.1.1` (`semver`)
 
 AniGate is a controlled MCP gateway from ChatGPT Web to remote Linux. It is not
 a raw shell and it is not just an agent wrapper: every capability is an
 allowlisted, bounded, auditable tool.
+
+License: AniGate is source-available under the PolyForm Noncommercial License
+1.0.0. Noncommercial use is permitted; commercial use requires separate
+permission. Because commercial use is restricted, this is not an OSI-approved
+open-source license.
 
 ## Language Strategy
 
@@ -18,12 +23,12 @@ allowlisted, bounded, auditable tool.
 
 Core and policy:
 
-- `policy.info`, `sys.info`, `gate.stats`, `context.health`
+- `policy.info`, `sys.info`, `gate.stats`, `gate.doctor`, `context.health`
 
 Filesystem and search:
 
 - `fs.list`, `fs.read`, `fs.stat`, `fs.tree`, `file.search`,
-  `fs.write_preview`
+  `fs.write_preview`, `file.edit_apply`
 
 Artifact and bounded-output handling:
 
@@ -49,7 +54,8 @@ Project/task/publish:
 - `project.list`, `project.ensure`, `project.open`, `project.preflight`,
   `project.snapshot`, `project.lock_status`
 - `task.start`, `task.status`, `task.recover`, `task.digest`,
-  `task.finish_preview`, `task.timeline`, `task.search`
+  `task.finish_preview`, `task.commit_preview`, `task.commit`,
+  `task.timeline`, `task.search`
 - `publish.preview`, `publish.branch`, `publish.pr_create`
 
 Conversation handoff:
@@ -70,6 +76,8 @@ Conversation handoff:
   previews and follow-up tool names.
 - Push and PR creation require `publish.preview` and a short-lived confirmation
   token.
+- Direct Web GPT edits are explicit Max actions through `file.edit_apply`;
+  Mini remains read/search/preview only.
 - Jobs, logs, events, artifacts, tasks, handoffs, and sessions are file-backed;
   no database is required.
 
@@ -160,6 +168,8 @@ project.ensure
 task.start
 agent.session_start task_id=<task>
 task.finish_preview
+task.commit_preview
+task.commit
 publish.preview
 publish.branch or publish.pr_create
 ```
@@ -167,3 +177,5 @@ publish.branch or publish.pr_create
 `project.ensure` only clones/fetches configured allowlist remotes. `task.start`
 creates a branch/worktree named `anigate/<task_id>-<slug>`. `publish.branch`
 and `publish.pr_create` require the token returned by `publish.preview`.
+`publish.preview` rejects dirty task worktrees; call `task.commit_preview` and
+`task.commit` first.

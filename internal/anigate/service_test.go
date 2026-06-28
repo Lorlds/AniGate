@@ -234,7 +234,23 @@ func TestGitLogShowAndPatchApply(t *testing.T) {
 	if !strings.Contains(preview["diff"].(string), "+patched") {
 		t.Fatalf("preview missing diff: %#v", preview["diff"])
 	}
+	edited, err := svc.fileEditApply(map[string]any{"workspace": "test", "path": "hello.txt", "content": "alpha\nbeta\nweb\n", "expected_old_text": "gamma"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if edited["actor"] != "web_gpt_direct" || !strings.Contains(edited["diff"].(string), "+web") {
+		t.Fatalf("bad direct edit result: %#v", edited)
+	}
+	if _, err := svc.fileEditApply(map[string]any{"workspace": "test", "path": "hello.txt", "content": "bad\n", "expected_sha256": "bad"}); err == nil {
+		t.Fatal("expected sha mismatch rejection")
+	}
+	if _, err := svc.fileEditApply(map[string]any{"workspace": "test", "path": "new.txt", "content": "new\n"}); err == nil {
+		t.Fatal("expected create=false rejection")
+	}
 	patch := "diff --git a/hello.txt b/hello.txt\n--- a/hello.txt\n+++ b/hello.txt\n@@ -1,3 +1,3 @@\n alpha\n beta\n-gamma\n+patched\n"
+	if err := os.WriteFile(filepath.Join(root, "hello.txt"), []byte("alpha\nbeta\ngamma\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	applied, err := svc.patchApply(map[string]any{"workspace": "test", "path": ".", "patch": patch})
 	if err != nil {
 		t.Fatal(err)
@@ -248,6 +264,13 @@ func TestGitLogShowAndPatchApply(t *testing.T) {
 	}
 	if _, err := validatePatchPaths("diff --git a/../x b/../x\n--- a/../x\n+++ b/../x\n"); err == nil {
 		t.Fatal("expected escaping patch path rejection")
+	}
+}
+
+func TestFileEditApplyRejectsReadOnlyWorkspace(t *testing.T) {
+	svc, _ := testService(t)
+	if _, err := svc.fileEditApply(map[string]any{"workspace": "test", "path": "hello.txt", "content": "blocked\n"}); err == nil {
+		t.Fatal("expected read-only workspace rejection")
 	}
 }
 
@@ -294,6 +317,15 @@ func TestHTTPAuth(t *testing.T) {
 	if !authorized(req, "secret") {
 		t.Fatal("expected bearer auth success")
 	}
+	if err := httpListenRequiresToken("127.0.0.1:8787", ""); err != nil {
+		t.Fatalf("loopback without token should be allowed: %v", err)
+	}
+	if err := httpListenRequiresToken("0.0.0.0:8787", ""); err == nil {
+		t.Fatal("expected non-loopback without token rejection")
+	}
+	if err := httpListenRequiresToken("0.0.0.0:8787", "secret"); err != nil {
+		t.Fatalf("token should allow non-loopback: %v", err)
+	}
 }
 
 func TestAgentSessionSync(t *testing.T) {
@@ -335,6 +367,12 @@ func TestAuditEventsTail(t *testing.T) {
 
 func TestArtifactAndHandoff(t *testing.T) {
 	svc, _ := testService(t)
+	out := map[string]any{"next": []string{"publish.preview"}}
+	svc.addArtifactFields(out, &ArtifactRef{ID: "a", Next: []string{"artifact.search", "publish.preview"}})
+	merged := out["next"].([]string)
+	if strings.Join(merged, ",") != "publish.preview,artifact.search" {
+		t.Fatalf("unexpected merged next: %#v", merged)
+	}
 	svc.cfg.MaxReadBytes = 8
 	got, err := svc.fsRead(map[string]any{"workspace": "test", "path": "hello.txt", "max_bytes": float64(8)})
 	if err != nil {
@@ -458,10 +496,28 @@ func TestProjectTaskPublishAndAgentBinding(t *testing.T) {
 	if !strings.Contains(preview["diff"].(string), "+change") {
 		t.Fatalf("preview missing diff: %#v", preview)
 	}
+	if _, err := svc.publishPreview(map[string]any{"task_id": task.ID}); err == nil {
+		t.Fatal("expected dirty task publish preview rejection")
+	}
 	runGitForTest(t, task.Worktree, "config", "user.email", "test@example.com")
 	runGitForTest(t, task.Worktree, "config", "user.name", "Tester")
-	runGitForTest(t, task.Worktree, "add", "README.md")
-	runGitForTest(t, task.Worktree, "commit", "-m", "change readme")
+	commitPreview, err := svc.taskCommitPreview(map[string]any{"task_id": task.ID, "message": "change readme"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(commitPreview["diff"].(string), "+change") {
+		t.Fatalf("commit preview missing diff: %#v", commitPreview)
+	}
+	if _, err := svc.taskCommit(map[string]any{"task_id": task.ID, "message": "change readme", "expected_diff_sha256": "bad"}); err == nil {
+		t.Fatal("expected commit fingerprint mismatch")
+	}
+	committed, err := svc.taskCommit(map[string]any{"task_id": task.ID, "message": "change readme", "expected_diff_sha256": commitPreview["diff_sha256"]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if committed["commit"].(string) == "" {
+		t.Fatalf("missing commit sha: %#v", committed)
+	}
 	pub, err := svc.publishPreview(map[string]any{"task_id": task.ID})
 	if err != nil {
 		t.Fatal(err)
@@ -473,6 +529,9 @@ func TestProjectTaskPublishAndAgentBinding(t *testing.T) {
 	if _, err := svc.publishBranch(map[string]any{"task_id": task.ID, "confirm_token": token}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := svc.publishBranch(map[string]any{"task_id": task.ID, "confirm_token": token}); err == nil {
+		t.Fatal("expected consumed publish token rejection")
+	}
 	branches := mustGitOutput(t, remote, "branch")
 	if !strings.Contains(branches, task.Branch) {
 		t.Fatalf("remote missing pushed branch %q: %s", task.Branch, branches)
@@ -483,6 +542,24 @@ func TestProjectTaskPublishAndAgentBinding(t *testing.T) {
 	}
 	if !strings.Contains(digest["next_prompt"].(string), task.ID) {
 		t.Fatalf("handoff prompt missing task id: %#v", digest["next_prompt"])
+	}
+	doctor, err := svc.gateDoctor(map[string]any{"project": "demo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doctor["ok"] != true {
+		t.Fatalf("expected doctor ok: %#v", doctor)
+	}
+	preflight, err := svc.projectPreflight(map[string]any{"project": "demo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preflight["checks"] == nil {
+		t.Fatalf("expected preflight checks: %#v", preflight)
+	}
+	sampleCredentialURL := "https://" + "user:placeholder" + "@example.com/org/repo.git"
+	if got := sanitizeCommandText("git " + sampleCredentialURL + " failed"); strings.Contains(got, "placeholder@") {
+		t.Fatalf("expected sanitized command text, got %q", got)
 	}
 }
 

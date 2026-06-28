@@ -248,7 +248,7 @@ func (s *Service) findAgent(name string) (Agent, bool) {
 
 func (s *Service) writeAgentSession(session AgentSession) error {
 	dir := filepath.Join(s.cfg.StateDir, "agents", "sessions")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
 	b, err := json.MarshalIndent(session, "", "  ")
@@ -257,7 +257,7 @@ func (s *Service) writeAgentSession(session AgentSession) error {
 	}
 	path := filepath.Join(dir, session.ID+".json")
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
 		return err
 	}
 	return os.Rename(tmp, path)
@@ -283,14 +283,14 @@ func (s *Service) appendAgentMessage(sessionID string, msg AgentMessage) error {
 		msg.Time = time.Now().UTC()
 	}
 	dir := filepath.Join(s.cfg.StateDir, "agents", "messages")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
 	b, err := json.Marshal(msg)
 	if err != nil {
 		return err
 	}
-	f, err := os.OpenFile(filepath.Join(dir, sessionID+".ndjson"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(filepath.Join(dir, sessionID+".ndjson"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}

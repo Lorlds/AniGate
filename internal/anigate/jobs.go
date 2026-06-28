@@ -73,10 +73,10 @@ type JobManager struct {
 }
 
 func NewJobManager(cfg Config, policy pathPolicy, events *EventLog, log *slog.Logger) (*JobManager, error) {
-	if err := os.MkdirAll(filepath.Join(cfg.StateDir, "jobs"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(cfg.StateDir, "jobs"), 0o700); err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(filepath.Join(cfg.StateDir, "logs"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(cfg.StateDir, "logs"), 0o700); err != nil {
 		return nil, err
 	}
 	return &JobManager{cfg: cfg, policy: policy, events: events, log: log, active: map[string]context.CancelFunc{}}, nil
@@ -297,7 +297,7 @@ func (m *JobManager) run(parent context.Context, spec JobSpec, rec JobRecord) Jo
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 
-	logFile, err := os.OpenFile(rec.LogPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+	logFile, err := os.OpenFile(rec.LogPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 	if err != nil {
 		rec.State = JobFailed
 		rec.Error = err.Error()
@@ -397,7 +397,7 @@ func (m *JobManager) writeRecord(rec JobRecord) error {
 	tmp := path + ".tmp"
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
 		return err
 	}
 	return os.Rename(tmp, path)

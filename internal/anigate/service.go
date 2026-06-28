@@ -24,7 +24,7 @@ type Service struct {
 
 func NewService(cfg Config, log *slog.Logger) (*Service, error) {
 	cfg.applyDefaults()
-	if err := os.MkdirAll(cfg.StateDir, 0o755); err != nil {
+	if err := os.MkdirAll(cfg.StateDir, 0o700); err != nil {
 		return nil, err
 	}
 	events, err := NewEventLog(cfg.StateDir)
@@ -97,6 +97,14 @@ func (s *Service) Tools() []MCPTool {
 			"content":   map[string]any{"type": "string"},
 			"create":    map[string]any{"type": "boolean"},
 		})},
+		{Name: "file.edit_apply", Description: "Apply a direct Web GPT single-file edit inside a writable workspace when no configured agent should be used.", InputSchema: objectSchema(map[string]any{
+			"workspace":         map[string]any{"type": "string"},
+			"path":              map[string]any{"type": "string"},
+			"content":           map[string]any{"type": "string"},
+			"create":            map[string]any{"type": "boolean"},
+			"expected_sha256":   map[string]any{"type": "string"},
+			"expected_old_text": map[string]any{"type": "string"},
+		})},
 		{Name: "git.status", Description: "Return git status for a repository inside an allowed workspace.", InputSchema: objectSchema(map[string]any{
 			"workspace": map[string]any{"type": "string"},
 			"path":      map[string]any{"type": "string"},
@@ -142,6 +150,9 @@ func (s *Service) Tools() []MCPTool {
 			"path":      map[string]any{"type": "string"},
 		})},
 		{Name: "gate.stats", Description: "Return AniGate local state counters and context-health inputs.", InputSchema: objectSchema(map[string]any{})},
+		{Name: "gate.doctor", Description: "Run structured AniGate configuration, workspace, project, GitHub CLI, and state-dir checks.", InputSchema: objectSchema(map[string]any{
+			"project": map[string]any{"type": "string"},
+		})},
 		{Name: "context.health", Description: "Estimate AniGate-related context pressure and recommend handoff when needed.", InputSchema: objectSchema(map[string]any{})},
 		{Name: "handoff.create", Description: "Create a compact handoff package and next-chat prompt.", InputSchema: objectSchema(map[string]any{
 			"task_id": map[string]any{"type": "string"},
@@ -234,6 +245,15 @@ func (s *Service) Tools() []MCPTool {
 		{Name: "task.finish_preview", Description: "Preview task diff/status before publish.", InputSchema: objectSchema(map[string]any{
 			"task_id": map[string]any{"type": "string"},
 		})},
+		{Name: "task.commit_preview", Description: "Preview task changes and return a diff fingerprint before committing.", InputSchema: objectSchema(map[string]any{
+			"task_id": map[string]any{"type": "string"},
+			"message": map[string]any{"type": "string"},
+		})},
+		{Name: "task.commit", Description: "Commit task worktree changes after a matching task.commit_preview fingerprint.", InputSchema: objectSchema(map[string]any{
+			"task_id":              map[string]any{"type": "string"},
+			"message":              map[string]any{"type": "string"},
+			"expected_diff_sha256": map[string]any{"type": "string"},
+		})},
 		{Name: "task.timeline", Description: "Read recent audit events related to a task.", InputSchema: objectSchema(map[string]any{
 			"task_id": map[string]any{"type": "string"},
 			"limit":   map[string]any{"type": "integer", "minimum": 1, "maximum": 200},
@@ -301,6 +321,8 @@ func (s *Service) CallTool(name string, raw json.RawMessage) (any, error) {
 		result, err = s.artifactStats()
 	case "fs.write_preview":
 		result, err = s.fsWritePreview(args)
+	case "file.edit_apply":
+		result, err = s.fileEditApply(args)
 	case "git.status":
 		result, err = s.gitStatus(args)
 	case "git.diff":
@@ -319,6 +341,8 @@ func (s *Service) CallTool(name string, raw json.RawMessage) (any, error) {
 		result, err = s.workspaceSnapshot(args)
 	case "gate.stats":
 		result, err = s.gateStats()
+	case "gate.doctor":
+		result, err = s.gateDoctor(args)
 	case "context.health":
 		result, err = s.contextHealth()
 	case "handoff.create":
@@ -371,6 +395,10 @@ func (s *Service) CallTool(name string, raw json.RawMessage) (any, error) {
 		result, err = s.taskDigest(args)
 	case "task.finish_preview":
 		result, err = s.taskFinishPreview(args)
+	case "task.commit_preview":
+		result, err = s.taskCommitPreview(args)
+	case "task.commit":
+		result, err = s.taskCommit(args)
 	case "task.timeline":
 		result, err = s.taskTimeline(args)
 	case "task.search":

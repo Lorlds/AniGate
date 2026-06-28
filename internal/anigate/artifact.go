@@ -204,7 +204,7 @@ func (s *Service) addArtifactFields(out map[string]any, ref *ArtifactRef) {
 		return
 	}
 	out["artifact"] = ref
-	out["next"] = ref.Next
+	out["next"] = mergeNext(out["next"], ref.Next)
 }
 
 func (s *Service) saveArtifactText(kind, name, text string, meta map[string]any) (ArtifactRecord, error) {
@@ -216,7 +216,7 @@ func (s *Service) saveArtifactText(kind, name, text string, meta map[string]any)
 		return ArtifactRecord{}, err
 	}
 	dir := filepath.Join(s.cfg.StateDir, "artifacts")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return ArtifactRecord{}, err
 	}
 	limit := s.cfg.MaxArtifactBytes
@@ -228,7 +228,7 @@ func (s *Service) saveArtifactText(kind, name, text string, meta map[string]any)
 		text = text[:limit]
 	}
 	path := filepath.Join(dir, id+".txt")
-	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(text), 0o600); err != nil {
 		return ArtifactRecord{}, err
 	}
 	rec := ArtifactRecord{
@@ -245,11 +245,39 @@ func (s *Service) saveArtifactText(kind, name, text string, meta map[string]any)
 	if err != nil {
 		return ArtifactRecord{}, err
 	}
-	if err := os.WriteFile(filepath.Join(dir, id+".json"), b, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, id+".json"), b, 0o600); err != nil {
 		return ArtifactRecord{}, err
 	}
 	s.events.Append(Event{Kind: "artifact_created", OK: true, Fields: map[string]any{"artifact_id": id, "kind": kind, "name": name}})
 	return rec, nil
+}
+
+func mergeNext(existing any, more []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(name string) {
+		if name == "" || seen[name] {
+			return
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	switch v := existing.(type) {
+	case []string:
+		for _, name := range v {
+			add(name)
+		}
+	case []any:
+		for _, raw := range v {
+			if name, ok := raw.(string); ok {
+				add(name)
+			}
+		}
+	}
+	for _, name := range more {
+		add(name)
+	}
+	return out
 }
 
 func (s *Service) readArtifactRecord(id string) (ArtifactRecord, error) {

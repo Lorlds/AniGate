@@ -1,6 +1,8 @@
 package anigate
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -133,6 +135,60 @@ func (s *Service) fsWritePreview(args map[string]any) (map[string]any, error) {
 	}, nil
 }
 
+func (s *Service) fileEditApply(args map[string]any) (map[string]any, error) {
+	workspace := stringArg(args, "workspace")
+	if err := s.workspaceAllows(workspace, "write"); err != nil {
+		return nil, err
+	}
+	rp, err := s.policy.resolve(workspace, stringArg(args, "path"))
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWriteParentInsideWorkspace(rp); err != nil {
+		return nil, err
+	}
+	content := stringArg(args, "content")
+	if int64(len(content)) > s.cfg.MaxReadBytes {
+		return nil, fmt.Errorf("content exceeds max_read_bytes")
+	}
+	create := boolArg(args, "create")
+	old := ""
+	oldBytes, err := os.ReadFile(rp.Abs)
+	if err != nil {
+		if !os.IsNotExist(err) || !create {
+			return nil, err
+		}
+	} else {
+		if looksBinary(oldBytes) {
+			return nil, fmt.Errorf("existing file appears binary")
+		}
+		old = string(oldBytes)
+	}
+	if expected := stringArg(args, "expected_sha256"); expected != "" && expected != sha256Hex(oldBytes) {
+		return nil, fmt.Errorf("expected_sha256 does not match current file")
+	}
+	if expected := stringArg(args, "expected_old_text"); expected != "" && !strings.Contains(old, expected) {
+		return nil, fmt.Errorf("expected_old_text not found in current file")
+	}
+	diff := simpleUnifiedDiff(filepath.ToSlash(rp.Rel), old, content)
+	if err := os.WriteFile(rp.Abs, []byte(content), 0o644); err != nil {
+		return nil, err
+	}
+	s.events.Append(Event{Kind: "file_edited", Tool: "file.edit_apply", Workspace: rp.Workspace.Name, Path: rp.Rel, OK: true, Fields: map[string]any{"actor": "web_gpt_direct"}})
+	return map[string]any{
+		"workspace":     rp.Workspace.Name,
+		"path":          rp.Rel,
+		"written":       true,
+		"old_bytes":     len(old),
+		"new_bytes":     len(content),
+		"before_sha256": sha256Hex(oldBytes),
+		"after_sha256":  sha256Hex([]byte(content)),
+		"diff":          diff,
+		"actor":         "web_gpt_direct",
+		"next":          []string{"task.finish_preview", "git.diff"},
+	}, nil
+}
+
 func statMap(rp resolvedPath, info os.FileInfo) map[string]any {
 	return map[string]any{
 		"workspace": rp.Workspace.Name,
@@ -142,6 +198,34 @@ func statMap(rp resolvedPath, info os.FileInfo) map[string]any {
 		"size":      info.Size(),
 		"modified":  info.ModTime().UTC().Format(time.RFC3339),
 	}
+}
+
+func sha256Hex(b []byte) string {
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
+
+func ensureWriteParentInsideWorkspace(rp resolvedPath) error {
+	root, err := filepath.Abs(rp.Workspace.Path)
+	if err != nil {
+		return err
+	}
+	if realRoot, err := filepath.EvalSymlinks(root); err == nil {
+		root = realRoot
+	}
+	parent := filepath.Dir(rp.Abs)
+	realParent, err := filepath.EvalSymlinks(parent)
+	if err != nil {
+		return err
+	}
+	rel, err := filepath.Rel(root, realParent)
+	if err != nil {
+		return err
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("path escapes workspace %q", rp.Workspace.Name)
+	}
+	return nil
 }
 
 func shouldSkipTreeEntry(name string) bool {

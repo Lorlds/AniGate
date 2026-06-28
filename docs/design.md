@@ -8,6 +8,10 @@ ChatGPT Web -> MCP HTTPS/Tunnel or stdio -> anigate -> policy -> workspace/proje
 
 It exposes small, auditable tools. It does not expose `run_shell`.
 
+AniGate is source-available under PolyForm Noncommercial 1.0.0. Noncommercial
+use is permitted, but commercial use is restricted, so this is not an
+OSI-approved open-source license.
+
 ## Runtime Shape
 
 - Core implementation: Go single binary, file-backed state, stdlib-first.
@@ -46,10 +50,10 @@ Mini is the bounded Linux gateway:
 Max adds controlled mutation and long-running work:
 
 - `git.status`, `git.diff`, `git.log`, `git.show`
-- `patch.apply`
+- `patch.apply`, `file.edit_apply`
 - `audit.*`, `job.list`, `job.cancel`
 - `agent.*` with file-backed sessions
-- `workspace.snapshot`, `gate.stats`
+- `workspace.snapshot`, `gate.stats`, `gate.doctor`
 - `project.*`, `task.*`, `publish.*`
 
 ## Large Output Policy
@@ -101,13 +105,17 @@ URLs.
 project.ensure -> clone/fetch allowlisted remote
 task.start     -> branch/worktree
 agent.*        -> optional task-bound long agent
+file.edit_apply or patch.apply -> controlled edits
+task.commit_preview -> verify changes
+task.commit    -> commit task worktree
 task.digest    -> compact continuation
 publish.preview -> confirmation token
 publish.branch or publish.pr_create
 ```
 
 `publish.branch` and `publish.pr_create` require a non-expired token created by
-`publish.preview`. Force push and protected branch pushes are not exposed.
+`publish.preview`. `publish.preview` rejects uncommitted task worktrees. Force
+push and protected branch pushes are not exposed.
 
 ## Security Model
 
@@ -115,6 +123,8 @@ publish.branch or publish.pr_create
 - No arbitrary remote Git URL.
 - All paths resolve through workspace policy.
 - Writable actions require non-read-only `operator` or `agent` workspaces.
+- Direct Web GPT writes use `file.edit_apply`; Mini remains read/search/preview
+  only.
 - Agent execution requires `agent` workspace profile.
 - Env vars are explicit and can be limited by `env_allowlist`.
 - Jobs use isolated `HOME` when enabled.

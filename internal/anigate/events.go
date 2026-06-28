@@ -34,7 +34,7 @@ type EventFilter struct {
 }
 
 func NewEventLog(stateDir string) (*EventLog, error) {
-	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+	if err := os.MkdirAll(stateDir, 0o700); err != nil {
 		return nil, err
 	}
 	return &EventLog{path: filepath.Join(stateDir, "events.ndjson")}, nil
@@ -53,7 +53,7 @@ func (l *EventLog) Append(ev Event) {
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	f, err := os.OpenFile(l.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(l.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return
 	}

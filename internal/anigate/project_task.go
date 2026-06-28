@@ -123,8 +123,10 @@ func (s *Service) projectPreflight(args map[string]any) (map[string]any, error) 
 	}
 	out := map[string]any{"project": projectInfo(project, rp)}
 	if _, err := os.Stat(filepath.Join(rp.Abs, ".git")); err != nil {
+		checks := s.doctorProjectChecks(project)
 		out["ok"] = false
 		out["message"] = "project is not cloned"
+		out["checks"] = checks
 		return out, nil
 	}
 	status, _ := s.runGitOutput(rp.Abs, "status", "--porcelain=v1", "--branch")
@@ -135,6 +137,9 @@ func (s *Service) projectPreflight(args map[string]any) (map[string]any, error) 
 	out["status"] = trimPreview(status, 4000)
 	out["remote_url"] = redactRemoteURL(strings.TrimSpace(remote))
 	out["remote_matches_allowlist"] = strings.TrimSpace(remote) == project.RemoteURL
+	checks := s.doctorProjectChecks(project)
+	out["checks"] = checks
+	out["ok"] = checksOK(checks)
 	return out, nil
 }
 
@@ -221,7 +226,7 @@ func (s *Service) taskStart(args map[string]any) (map[string]any, error) {
 	}
 	worktreesRoot := filepath.Join(filepath.Dir(rp.Abs), ".anigate-worktrees", project.Name)
 	worktree := filepath.Join(worktreesRoot, id)
-	if err := os.MkdirAll(worktreesRoot, 0o755); err != nil {
+	if err := os.MkdirAll(worktreesRoot, 0o700); err != nil {
 		return nil, err
 	}
 	if err := runGitExternal(rp.Abs, "worktree", "add", "-b", branch, worktree, base); err != nil {
@@ -306,9 +311,95 @@ func (s *Service) taskFinishPreview(args map[string]any) (map[string]any, error)
 	if err != nil {
 		return nil, err
 	}
-	out := map[string]any{"task": task, "status": status, "diff": text, "truncated": truncated, "next": []string{"publish.preview", "handoff.create"}}
+	out := map[string]any{"task": task, "status": status, "diff": text, "truncated": truncated, "next": []string{"task.commit_preview", "handoff.create"}}
 	s.addArtifactFields(out, ref)
 	return out, nil
+}
+
+func (s *Service) taskCommitPreview(args map[string]any) (map[string]any, error) {
+	task, err := s.readTask(stringArg(args, "task_id"))
+	if err != nil {
+		return nil, err
+	}
+	status, _ := s.runGitOutput(task.Worktree, "status", "--porcelain=v1", "--branch")
+	diff, err := s.runGitOutput(task.Worktree, "diff")
+	if err != nil {
+		return nil, err
+	}
+	diffStat, _ := s.runGitOutput(task.Worktree, "diff", "--stat")
+	fingerprint, err := s.taskChangeFingerprint(task)
+	if err != nil {
+		return nil, err
+	}
+	if !taskHasPendingChanges(task.Worktree) {
+		return nil, fmt.Errorf("task has no pending changes to commit")
+	}
+	message := strings.TrimSpace(stringArg(args, "message"))
+	if message == "" {
+		message = task.Title
+	}
+	if message == "" {
+		message = "AniGate task " + task.ID
+	}
+	text, truncated, ref, err := s.boundedTextArtifact("task.commit_preview", task.ID, diff, s.cfg.MaxReadBytes, map[string]any{"task_id": task.ID, "project": task.Project})
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{
+		"task":             task,
+		"status":           status,
+		"diff":             text,
+		"diff_stat":        diffStat,
+		"diff_sha256":      fingerprint,
+		"proposed_message": message,
+		"truncated":        truncated,
+		"next":             []string{"task.commit", "handoff.create"},
+	}
+	s.addArtifactFields(out, ref)
+	return out, nil
+}
+
+func (s *Service) taskCommit(args map[string]any) (map[string]any, error) {
+	task, err := s.readTask(stringArg(args, "task_id"))
+	if err != nil {
+		return nil, err
+	}
+	message := strings.TrimSpace(stringArg(args, "message"))
+	if message == "" {
+		return nil, fmt.Errorf("message is required")
+	}
+	expected := stringArg(args, "expected_diff_sha256")
+	if expected == "" {
+		return nil, fmt.Errorf("expected_diff_sha256 is required")
+	}
+	if !taskHasPendingChanges(task.Worktree) {
+		return nil, fmt.Errorf("task has no pending changes to commit")
+	}
+	fingerprint, err := s.taskChangeFingerprint(task)
+	if err != nil {
+		return nil, err
+	}
+	if fingerprint != expected {
+		return nil, fmt.Errorf("expected_diff_sha256 does not match current task changes")
+	}
+	if err := runGitExternal(task.Worktree, "add", "-A"); err != nil {
+		return nil, err
+	}
+	if err := runGitExternal(task.Worktree, "commit", "-m", message); err != nil {
+		return nil, err
+	}
+	commit, _ := s.runGitOutput(task.Worktree, "rev-parse", "HEAD")
+	status, _ := s.runGitOutput(task.Worktree, "status", "--porcelain=v1", "--branch")
+	task.UpdatedAt = time.Now().UTC()
+	_ = s.writeTask(task)
+	s.events.Append(Event{Kind: "task_committed", Tool: "task.commit", Workspace: task.Workspace, OK: true, Fields: map[string]any{"task_id": task.ID, "project": task.Project, "commit": strings.TrimSpace(commit)}})
+	return map[string]any{
+		"task":    task,
+		"commit":  strings.TrimSpace(commit),
+		"status":  status,
+		"message": message,
+		"next":    []string{"publish.preview", "handoff.create"},
+	}, nil
 }
 
 func (s *Service) taskTimeline(args map[string]any) (map[string]any, error) {
@@ -367,6 +458,9 @@ func (s *Service) publishPreview(args map[string]any) (map[string]any, error) {
 	}
 	status, _ := s.runGitOutput(task.Worktree, "status", "--porcelain=v1", "--branch")
 	diffStat, _ := s.runGitOutput(task.Worktree, "diff", "--stat")
+	if taskHasPendingChanges(task.Worktree) {
+		return nil, fmt.Errorf("task has uncommitted changes; call task.commit_preview then task.commit before publish.preview")
+	}
 	token, err := newPublishToken()
 	if err != nil {
 		return nil, err
@@ -391,7 +485,7 @@ func (s *Service) publishPreview(args map[string]any) (map[string]any, error) {
 }
 
 func (s *Service) publishBranch(args map[string]any) (map[string]any, error) {
-	task, project, _, err := s.verifyPublishToken(args)
+	task, project, rec, err := s.verifyPublishToken(args)
 	if err != nil {
 		return nil, err
 	}
@@ -401,6 +495,9 @@ func (s *Service) publishBranch(args map[string]any) (map[string]any, error) {
 	if task.Branch == project.DefaultBranch || task.Branch == "main" || task.Branch == "master" {
 		return nil, fmt.Errorf("refusing to push protected branch %q", task.Branch)
 	}
+	if err := s.deletePublishToken(rec.Token); err != nil {
+		return nil, err
+	}
 	if err := runGitExternal(task.Worktree, "push", "-u", "origin", task.Branch); err != nil {
 		return nil, err
 	}
@@ -409,7 +506,7 @@ func (s *Service) publishBranch(args map[string]any) (map[string]any, error) {
 }
 
 func (s *Service) publishPRCreate(args map[string]any) (map[string]any, error) {
-	task, project, _, err := s.verifyPublishToken(args)
+	task, project, rec, err := s.verifyPublishToken(args)
 	if err != nil {
 		return nil, err
 	}
@@ -427,6 +524,9 @@ func (s *Service) publishPRCreate(args map[string]any) (map[string]any, error) {
 	cmdArgs := []string{"pr", "create", "--base", project.DefaultBranch, "--head", task.Branch, "--title", title, "--body", body}
 	if boolArg(args, "draft") {
 		cmdArgs = append(cmdArgs, "--draft")
+	}
+	if err := s.deletePublishToken(rec.Token); err != nil {
+		return nil, err
 	}
 	out, err := runExternalOutput(task.Worktree, "gh", cmdArgs...)
 	if err != nil {
@@ -475,7 +575,7 @@ func projectInfo(project Project, rp resolvedPath) map[string]any {
 
 func (s *Service) writeTask(task TaskRecord) error {
 	dir := filepath.Join(s.cfg.StateDir, "tasks")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
 	b, err := json.MarshalIndent(task, "", "  ")
@@ -484,7 +584,7 @@ func (s *Service) writeTask(task TaskRecord) error {
 	}
 	path := filepath.Join(dir, task.ID+".json")
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
 		return err
 	}
 	return os.Rename(tmp, path)
@@ -535,6 +635,65 @@ func (s *Service) listTasks(project string, limit int) ([]TaskRecord, error) {
 	return tasks, nil
 }
 
+func (s *Service) taskChangeFingerprint(task TaskRecord) (string, error) {
+	var b strings.Builder
+	status, err := s.runGitOutput(task.Worktree, "status", "--porcelain=v1", "-z")
+	if err != nil {
+		return "", err
+	}
+	diff, err := s.runGitOutput(task.Worktree, "diff")
+	if err != nil {
+		return "", err
+	}
+	cached, err := s.runGitOutput(task.Worktree, "diff", "--cached")
+	if err != nil {
+		return "", err
+	}
+	b.WriteString("status\000")
+	b.WriteString(status)
+	b.WriteString("\000diff\000")
+	b.WriteString(diff)
+	b.WriteString("\000cached\000")
+	b.WriteString(cached)
+	untracked, err := s.runGitOutput(task.Worktree, "ls-files", "--others", "--exclude-standard", "-z")
+	if err != nil {
+		return "", err
+	}
+	for _, name := range strings.Split(untracked, "\x00") {
+		if name == "" {
+			continue
+		}
+		clean, err := cleanGitPath(name)
+		if err != nil {
+			return "", err
+		}
+		path := filepath.Join(task.Worktree, clean)
+		info, err := os.Stat(path)
+		if err != nil || info.IsDir() {
+			continue
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return "", err
+		}
+		b.WriteString("\000untracked\000")
+		b.WriteString(clean)
+		b.WriteString("\000")
+		b.WriteString(sha256Hex(content))
+	}
+	return sha256Hex([]byte(b.String())), nil
+}
+
+func taskHasPendingChanges(worktree string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), gitToolTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "status", "--porcelain=v1")
+	cmd.Dir = worktree
+	cmd.Env = []string{"PATH=" + pathEnv()}
+	b, err := cmd.Output()
+	return err == nil && strings.TrimSpace(string(b)) != ""
+}
+
 func (s *Service) writePublishToken(rec publishTokenRecord) error {
 	dir := filepath.Join(s.cfg.StateDir, "publish_tokens")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -545,6 +704,13 @@ func (s *Service) writePublishToken(rec publishTokenRecord) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(dir, rec.Token+".json"), b, 0o600)
+}
+
+func (s *Service) deletePublishToken(token string) error {
+	if !validName(token) {
+		return fmt.Errorf("invalid confirm_token")
+	}
+	return os.Remove(filepath.Join(s.cfg.StateDir, "publish_tokens", token+".json"))
 }
 
 func (s *Service) verifyPublishToken(args map[string]any) (TaskRecord, Project, publishTokenRecord, error) {
@@ -598,7 +764,7 @@ func runExternalOutput(cwd, name string, args ...string) (string, error) {
 		return "", fmt.Errorf("%s command timed out", name)
 	}
 	if err != nil {
-		return "", fmt.Errorf("%s %s failed: %s", name, strings.Join(args, " "), trimPreview(string(b), 500))
+		return "", fmt.Errorf("%s %s failed: %s", name, sanitizeCommandText(strings.Join(args, " ")), sanitizeCommandText(trimPreview(string(b), 500)))
 	}
 	return string(b), nil
 }
@@ -612,6 +778,17 @@ func redactRemoteURL(remote string) string {
 		}
 	}
 	return remote
+}
+
+func sanitizeCommandText(text string) string {
+	fields := strings.Fields(text)
+	for i, field := range fields {
+		fields[i] = redactRemoteURL(field)
+	}
+	if len(fields) > 0 {
+		text = strings.Join(fields, " ")
+	}
+	return text
 }
 
 func safeSlug(s string) string {
