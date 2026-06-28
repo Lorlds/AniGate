@@ -1,0 +1,4 @@
+/anigate
+/.anigate/
+*.test
+coverage.out
