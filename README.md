@@ -68,6 +68,32 @@ Conversation handoff:
 
 - `handoff.create`, `handoff.resume`, `handoff.search`, `handoff.digest`
 
+## Mini and Max Levels
+
+AniGate does not run two separate binaries for Mini and Max. It exposes one MCP
+tool registry, then authorizes each call through workspace policy.
+
+| Level | Intended use | Suggested workspace policy | Examples |
+| --- | --- | --- | --- |
+| Mini | Read, search, inspect, and preview without changing workspace files. | `profile: "reader"`, `read_only: true` | `fs.read`, `file.search`, `fs.write_preview`, `git.diff`, `artifact.search`, `handoff.*` |
+| Max Operator | Controlled execution and workspace mutation. | `profile: "operator"`, `read_only: false` | `app.run_preset`, `patch.apply`, `file.edit_apply`, `task.commit` |
+| Max Agent | Long-running configured agent work. | `profile: "agent"`, `read_only: false` | `agent.*`, task-bound agent sessions, publish flow |
+
+Important enforcement details:
+
+- `fs.write_preview` is Mini-safe: it returns a diff and does not write disk.
+- `file.edit_apply` and `patch.apply` require a non-read-only `operator` or
+  `agent` workspace.
+- `app.run_preset` requires `operator` or `agent` profile. Preset commands are
+  still configured argv arrays; AniGate does not expose arbitrary shell.
+- `agent.*` requires `agent` profile.
+- `tools/list` lists all possible tools. Use `policy.info` to inspect current
+  workspaces, profiles, and the `capability_levels` map; unauthorized calls fail
+  at execution time.
+- For a real two-tier deployment, run two configs or two HTTP listeners: a
+  Mini config with read-only `reader` workspaces, and a protected Max config
+  with `operator` or `agent` workspaces.
+
 ## Design Boundaries
 
 - No arbitrary shell tool.

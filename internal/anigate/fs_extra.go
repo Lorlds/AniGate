@@ -104,7 +104,7 @@ func (s *Service) buildTree(workspace, abs, rel string, depth, maxEntries int, c
 
 func (s *Service) fsWritePreview(args map[string]any) (map[string]any, error) {
 	workspace := stringArg(args, "workspace")
-	if err := s.workspaceAllows(workspace, "write"); err != nil {
+	if err := s.workspaceAllows(workspace, "read"); err != nil {
 		return nil, err
 	}
 	rp, err := s.policy.resolve(workspace, stringArg(args, "path"))

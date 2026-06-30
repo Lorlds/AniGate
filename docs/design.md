@@ -38,23 +38,30 @@ state/
 
 ## Capability Layers
 
-Mini is the bounded Linux gateway:
+Mini is the read/search/preview gateway. It maps to `profile: "reader"` and
+`read_only: true` workspaces:
 
 - `sys.info`, `policy.info`
 - `fs.list`, `fs.read`, `fs.stat`, `fs.tree`, `file.search`
-- `app.run_preset`
-- `job.status`, `job.logs_tail`
+- `fs.write_preview` for diff-only previews without disk writes
+- `git.status`, `git.diff`, `git.log`, `git.show`
+- `job.list`, `job.status`, `job.logs_tail`
 - `artifact.*` for large output follow-up reads/search
 - `context.health` and `handoff.*` for multi-chat continuation
+- read-only project/task status and search tools
 
-Max adds controlled mutation and long-running work:
+Max adds controlled execution, mutation, and long-running work. It maps to
+`operator` or `agent` workspaces; write tools also require `read_only: false`:
 
-- `git.status`, `git.diff`, `git.log`, `git.show`
 - `patch.apply`, `file.edit_apply`
-- `audit.*`, `job.list`, `job.cancel`
+- `app.run_preset`, `job.cancel`
 - `agent.*` with file-backed sessions
 - `workspace.snapshot`, `gate.stats`, `gate.doctor`
-- `project.*`, `task.*`, `publish.*`
+- mutating `project.*`, `task.*`, and `publish.*` actions
+
+AniGate exposes one MCP tool registry. Mini/Max is enforced at call time through
+workspace `profile` and `read_only` policy, not by hiding tools from
+`tools/list`.
 
 ## Large Output Policy
 
