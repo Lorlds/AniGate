@@ -14,6 +14,10 @@ import (
 )
 
 func testService(t *testing.T) (*Service, string) {
+	return testServiceWithProduct(t, ProductLineMax)
+}
+
+func testServiceWithProduct(t *testing.T, productLine ProductLine) (*Service, string) {
 	t.Helper()
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "hello.txt"), []byte("alpha\nbeta\ngamma\n"), 0o644); err != nil {
@@ -67,7 +71,7 @@ func testService(t *testing.T) (*Service, string) {
 			MaxHistoryMessages: 10,
 		}},
 	}
-	svc, err := NewService(cfg, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	svc, err := NewServiceWithProductLine(cfg, slog.New(slog.NewTextHandler(os.Stderr, nil)), productLine)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,6 +154,116 @@ func TestMCPToolsCall(t *testing.T) {
 	}
 }
 
+func TestMiniProductToolsArePreviewCore(t *testing.T) {
+	svc, _ := testServiceWithProduct(t, ProductLineMini)
+	got := toolNamesForTest(svc.Tools())
+	want := []string{
+		"policy.info",
+		"sys.info",
+		"fs.list",
+		"fs.read",
+		"fs.stat",
+		"fs.tree",
+		"file.search",
+		"artifact.list",
+		"artifact.read_range",
+		"artifact.search",
+		"artifact.stats",
+		"fs.write_preview",
+		"git.status",
+		"git.diff",
+		"git.log",
+		"git.show",
+		"context.health",
+		"handoff.create",
+		"handoff.resume",
+		"handoff.search",
+		"handoff.digest",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("unexpected mini tools:\nwant %v\ngot  %v", want, got)
+	}
+	for _, name := range got {
+		if strings.HasPrefix(name, "agent.") || strings.HasPrefix(name, "publish.") || name == "file.edit_apply" || name == "patch.apply" {
+			t.Fatalf("mini exposed max tool %q", name)
+		}
+	}
+}
+
+func TestMiniProductCallToolRejectsMaxTools(t *testing.T) {
+	svc, _ := testServiceWithProduct(t, ProductLineMini)
+	for _, name := range []string{"file.edit_apply", "patch.apply", "agent.message_send", "publish.preview"} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := svc.CallTool(name, json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "not available in mini product line") {
+				t.Fatalf("expected mini product gate for %s, got %v", name, err)
+			}
+		})
+	}
+}
+
+func TestMiniProductWritePreviewDoesNotWrite(t *testing.T) {
+	svc, root := testServiceWithProduct(t, ProductLineMini)
+	args, _ := json.Marshal(map[string]any{"workspace": "test", "path": "hello.txt", "content": "preview\n"})
+	got, err := svc.CallTool("fs.write_preview", args)
+	if err != nil {
+		t.Fatalf("mini write preview failed: %v", err)
+	}
+	result := got.(map[string]any)
+	if result["would_write"] != true {
+		t.Fatalf("bad preview result: %#v", result)
+	}
+	b, err := os.ReadFile(filepath.Join(root, "hello.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != "alpha\nbeta\ngamma\n" {
+		t.Fatalf("write preview modified disk: %q", b)
+	}
+}
+
+func TestMaxProductToolsRemainComplete(t *testing.T) {
+	svc, _ := testServiceWithProduct(t, ProductLineMax)
+	got := toolNamesForTest(svc.Tools())
+	if len(got) != 56 {
+		t.Fatalf("expected 56 max tools, got %d: %v", len(got), got)
+	}
+	wantPresent := []string{"file.edit_apply", "patch.apply", "agent.message_send", "publish.preview"}
+	have := map[string]bool{}
+	for _, name := range got {
+		have[name] = true
+	}
+	for _, name := range wantPresent {
+		if !have[name] {
+			t.Fatalf("max tools missing %s", name)
+		}
+	}
+}
+
+func TestPolicyInfoReportsProductLineAndFilteredTools(t *testing.T) {
+	mini, _ := testServiceWithProduct(t, ProductLineMini)
+	info, err := mini.policyInfo()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info["product_line"] != ProductLineMini {
+		t.Fatalf("unexpected product line: %#v", info["product_line"])
+	}
+	tools := info["tools"].([]MCPTool)
+	names := toolNamesForTest(tools)
+	if len(names) != 21 {
+		t.Fatalf("expected 21 mini policy tools, got %d", len(names))
+	}
+	for _, name := range names {
+		if name == "file.edit_apply" || name == "patch.apply" || strings.HasPrefix(name, "agent.") || strings.HasPrefix(name, "publish.") {
+			t.Fatalf("policy.info exposed max tool in mini: %s", name)
+		}
+	}
+	productLines := info["product_lines"].(map[string]any)
+	if productLines["mini"] == nil || productLines["max"] == nil {
+		t.Fatalf("missing product line metadata: %#v", productLines)
+	}
+}
+
 func TestInitializeReportsVersion(t *testing.T) {
 	svc, _ := testService(t)
 	req, _ := json.Marshal(rpcRequest{
@@ -165,6 +279,14 @@ func TestInitializeReportsVersion(t *testing.T) {
 	if !strings.Contains(string(b), Version) {
 		t.Fatalf("initialize result missing version %s: %s", Version, b)
 	}
+}
+
+func toolNamesForTest(tools []MCPTool) []string {
+	names := make([]string, 0, len(tools))
+	for _, tool := range tools {
+		names = append(names, tool.Name)
+	}
+	return names
 }
 
 func TestVersionFileMatchesConstant(t *testing.T) {

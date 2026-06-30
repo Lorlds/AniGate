@@ -1,10 +1,10 @@
 [Unit]
-Description=AniGate legacy Max local MCP gateway
+Description=AniGate Max controlled Linux MCP workbench
 After=network-online.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/anigate http --addr 127.0.0.1:8787 --config %h/.config/anigate/anigate.json
+ExecStart=%h/.local/bin/anigate-max http --addr 127.0.0.1:8788 --config %h/.config/anigate/anigate-max.json
 Restart=on-failure
 RestartSec=3
 NoNewPrivileges=true

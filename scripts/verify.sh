@@ -14,9 +14,16 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-BIN="$TMP_DIR/anigate"
-CONFIG=${ANIGATE_VERIFY_CONFIG:-configs/anigate.example.json}
+MINI_BIN="$TMP_DIR/anigate-mini"
+MAX_BIN="$TMP_DIR/anigate-max"
+LEGACY_BIN="$TMP_DIR/anigate"
+MINI_CONFIG=${ANIGATE_VERIFY_MINI_CONFIG:-configs/anigate.mini.example.json}
+MAX_CONFIG=${ANIGATE_VERIFY_MAX_CONFIG:-configs/anigate.max.example.json}
+LEGACY_CONFIG=${ANIGATE_VERIFY_CONFIG:-configs/anigate.example.json}
 ADDR=${ANIGATE_SMOKE_ADDR:-127.0.0.1:18787}
+
+echo "==> go mod verify"
+go mod verify
 
 echo "==> go test ./..."
 go test ./...
@@ -29,23 +36,60 @@ if [ "${ANIGATE_SKIP_RACE:-0}" != "1" ]; then
   go test -race ./...
 fi
 
-echo "==> go build"
-go build -trimpath -o "$BIN" ./cmd/anigate
+echo "==> go build anigate-mini"
+go build -trimpath -o "$MINI_BIN" ./cmd/anigate-mini
+
+echo "==> go build anigate-max"
+go build -trimpath -o "$MAX_BIN" ./cmd/anigate-max
+
+echo "==> go build anigate"
+go build -trimpath -o "$LEGACY_BIN" ./cmd/anigate
 
 echo "==> version"
-"$BIN" version
+"$MINI_BIN" version
+"$MAX_BIN" version
+"$LEGACY_BIN" version
 
-echo "==> tools"
-TOOL_COUNT=$("$BIN" tools --config "$CONFIG" | awk 'NF { count++ } END { print count + 0 }')
-if [ "$TOOL_COUNT" -lt 1 ]; then
-  echo "expected at least one exposed tool" >&2
+echo "==> mini tools"
+MINI_TOOLS=$("$MINI_BIN" tools --config "$MINI_CONFIG")
+MINI_COUNT=$(printf '%s\n' "$MINI_TOOLS" | awk 'NF { count++ } END { print count + 0 }')
+if [ "$MINI_COUNT" -ne 21 ]; then
+  echo "expected 21 Mini tools, got $MINI_COUNT" >&2
   exit 1
 fi
-echo "$TOOL_COUNT tools"
+if printf '%s\n' "$MINI_TOOLS" | grep -Eq '^(agent\.|publish\.|file\.edit_apply|patch\.apply|app\.run_preset|job\.|project\.|task\.|audit\.|workspace\.snapshot|gate\.)'; then
+  echo "Mini tools exposed a Max-only tool" >&2
+  printf '%s\n' "$MINI_TOOLS" >&2
+  exit 1
+fi
+echo "$MINI_COUNT Mini tools"
+
+echo "==> max tools"
+MAX_TOOLS=$("$MAX_BIN" tools --config "$MAX_CONFIG")
+MAX_COUNT=$(printf '%s\n' "$MAX_TOOLS" | awk 'NF { count++ } END { print count + 0 }')
+if [ "$MAX_COUNT" -ne 56 ]; then
+  echo "expected 56 Max tools, got $MAX_COUNT" >&2
+  exit 1
+fi
+for tool in file.edit_apply patch.apply agent.message_send publish.preview; do
+  if ! printf '%s\n' "$MAX_TOOLS" | grep -q "^$tool[	 ]"; then
+    echo "Max tools missing $tool" >&2
+    exit 1
+  fi
+done
+echo "$MAX_COUNT Max tools"
+
+echo "==> legacy tools"
+LEGACY_COUNT=$("$LEGACY_BIN" tools --config "$LEGACY_CONFIG" | awk 'NF { count++ } END { print count + 0 }')
+if [ "$LEGACY_COUNT" -ne 56 ]; then
+  echo "expected 56 legacy Max tools, got $LEGACY_COUNT" >&2
+  exit 1
+fi
+echo "$LEGACY_COUNT legacy tools"
 
 if command -v python3 >/dev/null 2>&1; then
   echo "==> HTTP MCP smoke test on $ADDR"
-  "$BIN" http --addr "$ADDR" --config "$CONFIG" >/tmp/anigate-verify-http.log 2>&1 &
+  "$MINI_BIN" http --addr "$ADDR" --config "$MINI_CONFIG" >/tmp/anigate-verify-http.log 2>&1 &
   SMOKE_PID=$!
   sleep 1
   ANIGATE_SMOKE_ADDR="$ADDR" python3 - <<'PY'

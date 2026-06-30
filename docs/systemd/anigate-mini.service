@@ -1,17 +1,16 @@
 [Unit]
-Description=AniGate legacy Max local MCP gateway
+Description=AniGate Mini safe MCP preview gateway
 After=network-online.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/anigate http --addr 127.0.0.1:8787 --config %h/.config/anigate/anigate.json
+ExecStart=%h/.local/bin/anigate-mini http --addr 127.0.0.1:8787 --config %h/.config/anigate/anigate-mini.json
 Restart=on-failure
 RestartSec=3
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
-# Add operator or agent workspace directories here if your config needs writes.
 ReadWritePaths=%h/.local/state/anigate %h/.config/anigate
 
 [Install]

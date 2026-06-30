@@ -1,0 +1,22 @@
+{
+  "state_dir": "../.anigate/mini-state",
+  "auth_token": "",
+  "max_read_bytes": 65536,
+  "max_search_file_bytes": 262144,
+  "max_search_results": 50,
+  "max_job_log_bytes": 1048576,
+  "max_artifact_bytes": 4194304,
+  "env_allowlist": [],
+  "isolated_home": true,
+  "workspaces": [
+    {
+      "name": "anigate",
+      "path": "..",
+      "read_only": true,
+      "profile": "reader"
+    }
+  ],
+  "projects": [],
+  "presets": [],
+  "agents": []
+}

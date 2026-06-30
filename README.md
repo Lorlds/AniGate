@@ -1,6 +1,6 @@
 # AniGate
 
-Version: `0.1.3` (`semver`)
+Version: `0.2.0` (`semver`)
 
 [![CI](https://github.com/Lorlds/AniGate/actions/workflows/ci.yml/badge.svg)](https://github.com/Lorlds/AniGate/actions/workflows/ci.yml)
 [![Latest Release](https://img.shields.io/github/v/release/Lorlds/AniGate?label=release)](https://github.com/Lorlds/AniGate/releases/latest)
@@ -11,6 +11,31 @@ Version: `0.1.3` (`semver`)
 AniGate is a controlled MCP gateway from ChatGPT Web to remote Linux. It is not
 a raw shell and it is not just an agent wrapper: every capability is an
 allowlisted, bounded, auditable tool.
+
+## Product Lines
+
+### AniGate Mini: Safe MCP Preview Gateway
+
+`anigate-mini` exposes only read, search, diff, artifact, context, and handoff
+tools. It is the recommended default for previewing a Linux workspace from an
+MCP client.
+
+Mini tools:
+
+- `policy.info`, `sys.info`, `context.health`
+- `fs.list`, `fs.read`, `fs.stat`, `fs.tree`, `file.search`,
+  `fs.write_preview`
+- `git.status`, `git.diff`, `git.log`, `git.show`
+- `artifact.list`, `artifact.read_range`, `artifact.search`, `artifact.stats`
+- `handoff.create`, `handoff.resume`, `handoff.search`, `handoff.digest`
+
+### AniGate Max: Controlled Linux MCP Workbench
+
+`anigate-max` exposes the complete controlled workbench: Mini tools plus
+execution, mutation, job management, agents, projects, tasks, publishing, audit,
+workspace snapshot, and gate diagnostics.
+
+`anigate` remains a legacy alias for Max.
 
 License: AniGate is source-available under the PolyForm Noncommercial License
 1.0.0. Noncommercial use is permitted; commercial use requires separate
@@ -68,31 +93,24 @@ Conversation handoff:
 
 - `handoff.create`, `handoff.resume`, `handoff.search`, `handoff.digest`
 
-## Mini and Max Levels
+## Product Enforcement
 
-AniGate does not run two separate binaries for Mini and Max. It exposes one MCP
-tool registry, then authorizes each call through workspace policy.
-
-| Level | Intended use | Suggested workspace policy | Examples |
-| --- | --- | --- | --- |
-| Mini | Read, search, inspect, and preview without changing workspace files. | `profile: "reader"`, `read_only: true` | `fs.read`, `file.search`, `fs.write_preview`, `git.diff`, `artifact.search`, `handoff.*` |
-| Max Operator | Controlled execution and workspace mutation. | `profile: "operator"`, `read_only: false` | `app.run_preset`, `patch.apply`, `file.edit_apply`, `task.commit` |
-| Max Agent | Long-running configured agent work. | `profile: "agent"`, `read_only: false` | `agent.*`, task-bound agent sessions, publish flow |
-
-Important enforcement details:
+Mini and Max are product lines, not workspace profile aliases.
 
 - `fs.write_preview` is Mini-safe: it returns a diff and does not write disk.
+- `tools/list` only lists tools available in the selected product line.
+- `tools/call` applies the product gate before dispatch, so Mini rejects direct
+  calls to Max tools such as `file.edit_apply`, `patch.apply`, `agent.*`, and
+  `publish.*`.
+- Max still uses workspace profile and `read_only` as a second authorization
+  layer.
 - `file.edit_apply` and `patch.apply` require a non-read-only `operator` or
-  `agent` workspace.
+  `agent` workspace in Max.
 - `app.run_preset` requires `operator` or `agent` profile. Preset commands are
   still configured argv arrays; AniGate does not expose arbitrary shell.
-- `agent.*` requires `agent` profile.
-- `tools/list` lists all possible tools. Use `policy.info` to inspect current
-  workspaces, profiles, and the `capability_levels` map; unauthorized calls fail
-  at execution time.
-- For a real two-tier deployment, run two configs or two HTTP listeners: a
-  Mini config with read-only `reader` workspaces, and a protected Max config
-  with `operator` or `agent` workspaces.
+- `agent.*` requires `agent` profile in Max.
+- `policy.info` reports `product_line`, `product_lines`, and the tools exposed
+  by the current product line.
 
 ## Design Boundaries
 
@@ -119,7 +137,7 @@ events to an AniMonitor webhook.
 
 ## Quick Start
 
-Install to `~/.local/bin/anigate` and generate a user config:
+Install the three binaries and generate Mini, Max, and legacy configs:
 
 ```bash
 git clone https://github.com/Lorlds/AniGate.git
@@ -127,22 +145,30 @@ cd AniGate
 ./scripts/install.sh
 ```
 
-The installer writes a local config to:
+The installer writes configs to:
 
 ```text
+~/.config/anigate/anigate-mini.json
+~/.config/anigate/anigate-max.json
 ~/.config/anigate/anigate.json
 ```
 
-Run a local HTTP MCP server:
+Run Mini over local HTTP:
 
 ```bash
-~/.local/bin/anigate http --addr 127.0.0.1:8787 --config ~/.config/anigate/anigate.json
+~/.local/bin/anigate-mini http --addr 127.0.0.1:8787 --config ~/.config/anigate/anigate-mini.json
 ```
 
-Or run stdio mode for a local MCP client:
+Run Max over local HTTP:
 
 ```bash
-~/.local/bin/anigate stdio --config ~/.config/anigate/anigate.json
+~/.local/bin/anigate-max http --addr 127.0.0.1:8788 --config ~/.config/anigate/anigate-max.json
+```
+
+Or run Mini stdio mode for a local MCP client:
+
+```bash
+~/.local/bin/anigate-mini stdio --config ~/.config/anigate/anigate-mini.json
 ```
 
 Developer checkout:
@@ -150,17 +176,17 @@ Developer checkout:
 ```bash
 make verify
 make build
-./bin/anigate version
-./bin/anigate stdio --config configs/anigate.example.json
+./bin/anigate-mini version
+./bin/anigate-mini stdio --config configs/anigate.mini.example.json
 ```
 
-HTTP mode:
+Max HTTP mode:
 
 ```bash
-./bin/anigate http --addr 127.0.0.1:8787 --config configs/anigate.example.json
+./bin/anigate-max http --addr 127.0.0.1:8788 --config configs/anigate.max.example.json
 ```
 
-Then POST JSON-RPC requests to `http://127.0.0.1:8787/mcp`. For ChatGPT Web,
+Then POST JSON-RPC requests to the selected `/mcp` endpoint. For ChatGPT Web,
 expose the MCP endpoint with HTTPS or OpenAI Secure MCP Tunnel.
 
 Useful files for new users:
@@ -169,9 +195,12 @@ Useful files for new users:
 - `docs/user-quickstart.md`: step-by-step setup.
 - `CONTRIBUTING.md`: contribution workflow and local verification.
 - `SECURITY.md`: supported versions and vulnerability reporting.
-- `examples/mcp-client.stdio.json`: local stdio MCP client example.
-- `examples/mcp-client.http.json`: HTTP MCP client example.
-- `docs/systemd/anigate.service`: optional user-level systemd service.
+- `examples/mcp-client.mini.stdio.json`: Mini stdio MCP client example.
+- `examples/mcp-client.mini.http.json`: Mini HTTP MCP client example.
+- `examples/mcp-client.max.stdio.json`: Max stdio MCP client example.
+- `examples/mcp-client.max.http.json`: Max HTTP MCP client example.
+- `docs/systemd/anigate-mini.service`: optional Mini user-level systemd service.
+- `docs/systemd/anigate-max.service`: optional Max user-level systemd service.
 - `scripts/verify.sh`: local test/build/smoke verification.
 - `scripts/install.sh`: local install and config generation.
 
@@ -179,7 +208,8 @@ Release binaries are built by GitHub Actions for `v*` tags.
 
 ## Configuration
 
-Copy `configs/anigate.example.json` and adjust:
+Copy `configs/anigate.mini.example.json` or `configs/anigate.max.example.json`
+and adjust. `configs/anigate.example.json` is kept as a legacy Max example.
 
 - `workspaces`: allowed roots for `fs.*`, `file.search`, `git.*`, project
   worktrees, and agents.

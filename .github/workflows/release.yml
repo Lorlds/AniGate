@@ -30,7 +30,10 @@ jobs:
           for target in "${targets[@]}"; do
             read -r goos goarch <<<"$target"
             out="anigate-${GITHUB_REF_NAME}-${goos}-${goarch}"
-            GOOS="$goos" GOARCH="$goarch" CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "dist/${out}/anigate" ./cmd/anigate
+            mkdir -p "dist/${out}"
+            for bin in anigate-mini anigate-max anigate; do
+              GOOS="$goos" GOARCH="$goarch" CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "dist/${out}/${bin}" "./cmd/${bin}"
+            done
             cp README.md README.zh-CN.md LICENSE "dist/${out}/"
             tar -C dist -czf "dist/${out}.tar.gz" "$out"
             rm -rf "dist/${out}"

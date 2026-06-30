@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.0
+
+- Split AniGate into two product lines: `anigate-mini` for safe preview and
+  `anigate-max` for the full controlled Linux workbench.
+- Kept `anigate` as a legacy alias for Max.
+- Added product-line filtering for `tools/list` and product-line gating before
+  `tools/call` dispatch.
+- Added Mini and Max example configs, MCP client examples, and systemd service
+  examples.
+- Updated install, verify, CI, and release packaging to build all three
+  binaries.
+- Replaced the old Mini/Max workspace-level documentation with product-line
+  documentation.
+
 ## 0.1.3
 
 - Documented the Mini and Max capability levels in English and Chinese README.
