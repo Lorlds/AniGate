@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.3
+
+- Documented the Mini and Max capability levels in English and Chinese README.
+- Added `capability_levels` to `policy.info` so clients can inspect the
+  Mini/Max workspace-policy mapping.
+- Made `fs.write_preview` Mini-safe by authorizing it as read permission; it
+  still returns a diff only and does not write disk.
+- Added a regression test proving Mini reader workspaces can preview but cannot
+  edit, patch, run presets, or start agents.
+- Added `go mod verify` to CI.
+
 ## 0.1.2
 
 - Added beginner-friendly install and verification scripts.
