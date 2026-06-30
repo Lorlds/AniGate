@@ -274,6 +274,34 @@ func TestFileEditApplyRejectsReadOnlyWorkspace(t *testing.T) {
 	}
 }
 
+func TestMiniReaderAllowsPreviewButRejectsMutation(t *testing.T) {
+	svc, root := testService(t)
+	ws := Workspace{Name: "test", Path: root, ReadOnly: true, Profile: "reader"}
+	svc.cfg.Workspaces = []Workspace{ws}
+	svc.policy = newPathPolicy(svc.cfg.Workspaces)
+	svc.jobs.policy = svc.policy
+
+	preview, err := svc.fsWritePreview(map[string]any{"workspace": "test", "path": "hello.txt", "content": "preview\n"})
+	if err != nil {
+		t.Fatalf("mini reader should allow write preview: %v", err)
+	}
+	if preview["would_write"] != true {
+		t.Fatalf("expected preview result: %#v", preview)
+	}
+	if _, err := svc.fileEditApply(map[string]any{"workspace": "test", "path": "hello.txt", "content": "blocked\n"}); err == nil {
+		t.Fatal("expected mini reader to reject direct edit")
+	}
+	if _, err := svc.patchApply(map[string]any{"workspace": "test", "path": ".", "patch": "diff --git a/hello.txt b/hello.txt\n"}); err == nil {
+		t.Fatal("expected mini reader to reject patch apply")
+	}
+	if _, _, err := svc.jobs.RunPreset(contextWithBackground(), "echo_ok", nil, false); err == nil {
+		t.Fatal("expected mini reader to reject preset execution")
+	}
+	if _, err := svc.agentSessionStart(map[string]any{"agent": "echo_agent"}); err == nil {
+		t.Fatal("expected mini reader to reject agent sessions")
+	}
+}
+
 func TestJobListCancelAndAuditSummary(t *testing.T) {
 	svc, _ := testService(t)
 	job, _, err := svc.jobs.RunPreset(contextWithBackground(), "sleep_short", nil, true)

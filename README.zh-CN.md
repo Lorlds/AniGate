@@ -200,6 +200,30 @@ handoff：
 
 - `handoff.create`、`handoff.resume`、`handoff.search`、`handoff.digest`
 
+## Mini 和 Max 等级
+
+AniGate 不是通过两个不同二进制区分 Mini/Max。它暴露一份 MCP tool
+registry，然后在每次调用时按 workspace policy 做权限判断。
+
+| 等级 | 用途 | 推荐 workspace policy | 示例 |
+| --- | --- | --- | --- |
+| Mini | 读取、搜索、检查、预览，不修改 workspace 文件。 | `profile: "reader"`，`read_only: true` | `fs.read`、`file.search`、`fs.write_preview`、`git.diff`、`artifact.search`、`handoff.*` |
+| Max Operator | 受控命令执行和 workspace 修改。 | `profile: "operator"`，`read_only: false` | `app.run_preset`、`patch.apply`、`file.edit_apply`、`task.commit` |
+| Max Agent | 长时间运行的配置化 agent 工作。 | `profile: "agent"`，`read_only: false` | `agent.*`、绑定 task 的 agent session、publish flow |
+
+关键实现细节：
+
+- `fs.write_preview` 是 Mini 安全工具：只返回 diff，不写磁盘。
+- `file.edit_apply` 和 `patch.apply` 需要非只读的 `operator` 或 `agent`
+  workspace。
+- `app.run_preset` 需要 `operator` 或 `agent` profile。preset 仍然是配置好的
+  argv 数组，AniGate 不开放任意 shell。
+- `agent.*` 需要 `agent` profile。
+- `tools/list` 会列出所有可能的工具。用 `policy.info` 查看当前 workspace、
+  profile 和 `capability_levels`；没有权限的调用会在执行时失败。
+- 如果要真正做双层部署，建议跑两份 config 或两个 HTTP listener：Mini 使用只读
+  `reader` workspace；Max 使用带 token 保护的 `operator` 或 `agent` workspace。
+
 ## 更多说明
 
 - `docs/user-quickstart.md`：普通用户快速开始。
