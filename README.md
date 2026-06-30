@@ -1,6 +1,6 @@
 # AniGate
 
-Version: `0.1.2` (`semver`)
+Version: `0.1.3` (`semver`)
 
 [![CI](https://github.com/Lorlds/AniGate/actions/workflows/ci.yml/badge.svg)](https://github.com/Lorlds/AniGate/actions/workflows/ci.yml)
 [![Latest Release](https://img.shields.io/github/v/release/Lorlds/AniGate?label=release)](https://github.com/Lorlds/AniGate/releases/latest)
