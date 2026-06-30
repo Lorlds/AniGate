@@ -15,14 +15,23 @@ import (
 )
 
 type Service struct {
-	cfg    Config
-	policy pathPolicy
-	jobs   *JobManager
-	events *EventLog
-	log    *slog.Logger
+	cfg         Config
+	productLine ProductLine
+	policy      pathPolicy
+	jobs        *JobManager
+	events      *EventLog
+	log         *slog.Logger
 }
 
 func NewService(cfg Config, log *slog.Logger) (*Service, error) {
+	return NewServiceWithProductLine(cfg, log, ProductLineMax)
+}
+
+func NewServiceWithProductLine(cfg Config, log *slog.Logger, productLine ProductLine) (*Service, error) {
+	line, err := normalizeProductLine(productLine)
+	if err != nil {
+		return nil, err
+	}
 	cfg.applyDefaults()
 	if err := os.MkdirAll(cfg.StateDir, 0o700); err != nil {
 		return nil, err
@@ -36,10 +45,24 @@ func NewService(cfg Config, log *slog.Logger) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Service{cfg: cfg, policy: policy, jobs: jobs, events: events, log: log}, nil
+	return &Service{cfg: cfg, productLine: line, policy: policy, jobs: jobs, events: events, log: log}, nil
 }
 
 func (s *Service) Tools() []MCPTool {
+	tools := allTools()
+	if s.productLine != ProductLineMini {
+		return tools
+	}
+	filtered := tools[:0]
+	for _, tool := range tools {
+		if s.toolAllowedForProduct(tool.Name) {
+			filtered = append(filtered, tool)
+		}
+	}
+	return filtered
+}
+
+func allTools() []MCPTool {
 	return []MCPTool{
 		{Name: "policy.info", Description: "Return AniGate capabilities, limits, workspaces, profiles, presets, and agents.", InputSchema: objectSchema(map[string]any{})},
 		{Name: "sys.info", Description: "Return bounded system and AniGate configuration information.", InputSchema: objectSchema(map[string]any{})},
@@ -288,6 +311,10 @@ func objectSchema(props map[string]any) map[string]any {
 }
 
 func (s *Service) CallTool(name string, raw json.RawMessage) (any, error) {
+	if err := s.requireToolForProduct(name); err != nil {
+		s.events.Append(Event{Kind: "tool_call", Tool: name, OK: false, Message: errorString(err)})
+		return nil, err
+	}
 	var args map[string]any
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &args); err != nil {
@@ -445,6 +472,7 @@ func (s *Service) sysInfo() (map[string]any, error) {
 		"server":         "AniGate",
 		"version":        Version,
 		"version_scheme": VersionScheme,
+		"product_line":   s.productLine,
 		"mode":           "controlled-linux-gateway",
 		"hostname":       host,
 		"os":             runtime.GOOS,

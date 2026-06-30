@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "anigate-mini": {
+      "command": "/home/YOUR_USER/.local/bin/anigate-mini",
+      "args": [
+        "stdio",
+        "--config",
+        "/home/YOUR_USER/.config/anigate/anigate-mini.json"
+      ]
+    }
+  }
+}

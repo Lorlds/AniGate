@@ -12,6 +12,9 @@ AniGate is a controlled MCP gateway. Contributions should preserve these
 boundaries:
 
 - Do not add a raw shell tool.
+- Keep Mini and Max as separate product-line entrypoints; Mini must not expose
+  execution, edit, agent, publish, job, project, task, audit, workspace
+  snapshot, or gate diagnostic tools.
 - Keep file access inside configured workspaces.
 - Prefer narrow, named MCP tools over generic command execution.
 - Keep outputs bounded; large outputs should become local artifacts.
@@ -41,7 +44,8 @@ make test
 make vet
 make race
 make tools
-make run-http
+make run-http-mini
+make run-http-max
 ```
 
 ## Pull Request Checklist

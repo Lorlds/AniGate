@@ -59,6 +59,7 @@ func (s *Service) policyInfo() (map[string]any, error) {
 	return map[string]any{
 		"server":                "AniGate",
 		"version":               Version,
+		"product_line":          s.productLine,
 		"mode":                  "controlled-linux-gateway",
 		"auth_required":         s.cfg.AuthToken != "",
 		"no_arbitrary_shell":    true,
@@ -69,7 +70,7 @@ func (s *Service) policyInfo() (map[string]any, error) {
 		"max_artifact_bytes":    s.cfg.MaxArtifactBytes,
 		"isolated_home":         s.cfg.IsolatedHome,
 		"env_allowlist":         s.cfg.EnvAllowlist,
-		"capability_levels":     capabilityLevels(),
+		"product_lines":         productLinesInfo(),
 		"workspaces":            workspaces,
 		"presets":               presets,
 		"agents":                agents,
@@ -104,37 +105,4 @@ func (s *Service) workspaceAllows(workspaceName, need string) error {
 
 func permissionError(workspaceName, need string) error {
 	return errString("workspace %q does not allow %s", workspaceName, need)
-}
-
-func capabilityLevels() map[string]any {
-	return map[string]any{
-		"mini": map[string]any{
-			"description": "Read, search, inspect, and preview without mutating workspace files or running configured agents.",
-			"workspace":   "profile=reader, read_only=true",
-			"tools": []string{
-				"policy.info", "sys.info", "gate.stats", "gate.doctor", "context.health",
-				"fs.list", "fs.read", "fs.stat", "fs.tree", "file.search", "fs.write_preview",
-				"artifact.list", "artifact.read_range", "artifact.search", "artifact.stats",
-				"git.status", "git.diff", "git.log", "git.show",
-				"audit.events_tail", "audit.summary",
-				"workspace.snapshot",
-				"handoff.create", "handoff.resume", "handoff.search", "handoff.digest",
-				"job.list", "job.status", "job.logs_tail",
-				"project.list", "project.open", "project.preflight", "project.snapshot", "project.lock_status",
-				"task.status", "task.recover", "task.digest", "task.timeline", "task.search",
-			},
-		},
-		"max": map[string]any{
-			"description": "Controlled execution, mutation, agent sessions, task commits, and publish actions.",
-			"workspace":   "profile=operator or profile=agent; write tools also require read_only=false",
-			"tools": []string{
-				"app.run_preset", "job.cancel",
-				"patch.apply", "file.edit_apply",
-				"agent.session_start", "agent.message_send", "agent.session_status", "agent.messages_tail", "agent.session_list",
-				"project.ensure", "task.start", "task.finish_preview", "task.commit_preview", "task.commit",
-				"publish.preview", "publish.branch", "publish.pr_create",
-			},
-		},
-		"enforcement": "AniGate exposes one MCP tool registry; each call is authorized by workspace profile and read_only policy.",
-	}
 }

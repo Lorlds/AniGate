@@ -3,7 +3,7 @@
 AniGate is a controlled MCP gateway for remote Linux use from ChatGPT Web.
 
 ```text
-ChatGPT Web -> MCP HTTPS/Tunnel or stdio -> anigate -> policy -> workspace/project/task/job
+ChatGPT Web -> MCP HTTPS/Tunnel or stdio -> anigate-mini/anigate-max -> policy -> workspace/project/task/job
 ```
 
 It exposes small, auditable tools. It does not expose `run_shell`.
@@ -36,32 +36,42 @@ state/
   home/
 ```
 
-## Capability Layers
+## Product Lines
 
-Mini is the read/search/preview gateway. It maps to `profile: "reader"` and
-`read_only: true` workspaces:
+Mini and Max are product lines, not workspace profile aliases. The selected
+binary chooses the product line before any workspace authorization runs:
+
+- `anigate-mini`: Safe MCP Preview Gateway.
+- `anigate-max`: Controlled Linux MCP Workbench.
+- `anigate`: legacy alias for Max.
+
+`tools/list` only returns tools available in the selected product line.
+`tools/call` applies the same product gate before dispatch, so a client cannot
+call hidden Max tools by name through a Mini server.
+
+Mini is the read/search/diff/preview gateway. It exposes only:
 
 - `sys.info`, `policy.info`
 - `fs.list`, `fs.read`, `fs.stat`, `fs.tree`, `file.search`
 - `fs.write_preview` for diff-only previews without disk writes
 - `git.status`, `git.diff`, `git.log`, `git.show`
-- `job.list`, `job.status`, `job.logs_tail`
 - `artifact.*` for large output follow-up reads/search
 - `context.health` and `handoff.*` for multi-chat continuation
-- read-only project/task status and search tools
 
-Max adds controlled execution, mutation, and long-running work. It maps to
-`operator` or `agent` workspaces; write tools also require `read_only: false`:
+Mini does not expose execution, mutation, job management, agent, project, task,
+publish, audit, workspace snapshot, or gate doctor/stats tools.
+
+Max exposes the complete tool registry. Workspace profile and `read_only` remain
+a second authorization layer:
 
 - `patch.apply`, `file.edit_apply`
-- `app.run_preset`, `job.cancel`
+- `app.run_preset`, `job.*`
 - `agent.*` with file-backed sessions
-- `workspace.snapshot`, `gate.stats`, `gate.doctor`
-- mutating `project.*`, `task.*`, and `publish.*` actions
+- `audit.*`, `workspace.snapshot`, `gate.stats`, `gate.doctor`
+- `project.*`, `task.*`, and `publish.*` actions
 
-AniGate exposes one MCP tool registry. Mini/Max is enforced at call time through
-workspace `profile` and `read_only` policy, not by hiding tools from
-`tools/list`.
+For Max, `file.edit_apply` and `patch.apply` require a non-read-only
+`operator` or `agent` workspace. `agent.*` requires an `agent` workspace.
 
 ## Large Output Policy
 

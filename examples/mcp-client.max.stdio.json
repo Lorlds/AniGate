@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "anigate-max": {
+      "command": "/home/YOUR_USER/.local/bin/anigate-max",
+      "args": [
+        "stdio",
+        "--config",
+        "/home/YOUR_USER/.config/anigate/anigate-max.json"
+      ]
+    }
+  }
+}

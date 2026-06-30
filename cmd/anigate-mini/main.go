@@ -7,5 +7,5 @@ import (
 )
 
 func main() {
-	os.Exit(anigate.RunCLI(os.Args[1:], anigate.ProductLineMax))
+	os.Exit(anigate.RunCLI(os.Args[1:], anigate.ProductLineMini))
 }

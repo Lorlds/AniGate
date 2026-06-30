@@ -1,0 +1,89 @@
+{
+  "state_dir": "../.anigate/max-state",
+  "auth_token": "",
+  "max_read_bytes": 65536,
+  "max_search_file_bytes": 262144,
+  "max_search_results": 50,
+  "max_job_log_bytes": 1048576,
+  "max_artifact_bytes": 4194304,
+  "env_allowlist": ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"],
+  "isolated_home": true,
+  "workspaces": [
+    {
+      "name": "anigate",
+      "path": "..",
+      "read_only": false,
+      "profile": "agent"
+    },
+    {
+      "name": "sandboxes",
+      "path": "../../sandboxes",
+      "read_only": true,
+      "profile": "reader"
+    }
+  ],
+  "projects": [
+    {
+      "name": "anigate",
+      "description": "AniGate repository managed through the controlled project/task tools",
+      "workspace": "anigate",
+      "path": ".",
+      "remote_url": "https://github.com/OWNER/REPO.git",
+      "default_branch": "main",
+      "provider": "github_gh",
+      "allow_push": true,
+      "allow_pr": true,
+      "default_agent": "echo_agent"
+    }
+  ],
+  "presets": [
+    {
+      "name": "anigate_git_status",
+      "description": "Show AniGate git status without exposing shell",
+      "workspace": "anigate",
+      "cwd": ".",
+      "command": ["git", "status", "--short"],
+      "timeout_sec": 15,
+      "async": false
+    },
+    {
+      "name": "sys_uptime",
+      "description": "Show system uptime",
+      "workspace": "anigate",
+      "cwd": ".",
+      "command": ["uptime"],
+      "timeout_sec": 10,
+      "async": false
+    },
+    {
+      "name": "git_recent",
+      "description": "Show recent commits with a bounded limit argument",
+      "workspace": "anigate",
+      "cwd": ".",
+      "command": ["git", "log", "--oneline", "-n", "{limit}"],
+      "args": [
+        {
+          "name": "limit",
+          "type": "int",
+          "default": 5,
+          "min": 1,
+          "max": 50
+        }
+      ],
+      "timeout_sec": 15,
+      "async": false
+    }
+  ],
+  "agents": [
+    {
+      "name": "echo_agent",
+      "description": "Development placeholder that echoes the session prompt",
+      "provider": "echo",
+      "workspace": "anigate",
+      "cwd": ".",
+      "command": ["printf", "{prompt}"],
+      "timeout_sec": 30,
+      "max_history_messages": 20
+    }
+  ]
+}
