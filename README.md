@@ -2,6 +2,10 @@
 
 Version: `0.1.2` (`semver`)
 
+[![CI](https://github.com/Lorlds/AniGate/actions/workflows/ci.yml/badge.svg)](https://github.com/Lorlds/AniGate/actions/workflows/ci.yml)
+[![Latest Release](https://img.shields.io/github/v/release/Lorlds/AniGate?label=release)](https://github.com/Lorlds/AniGate/releases/latest)
+[![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue)](LICENSE)
+
 [中文 README](README.zh-CN.md)
 
 AniGate is a controlled MCP gateway from ChatGPT Web to remote Linux. It is not
@@ -137,6 +141,8 @@ Useful files for new users:
 
 - `README.zh-CN.md`: Chinese quick start and safety notes.
 - `docs/user-quickstart.md`: step-by-step setup.
+- `CONTRIBUTING.md`: contribution workflow and local verification.
+- `SECURITY.md`: supported versions and vulnerability reporting.
 - `examples/mcp-client.stdio.json`: local stdio MCP client example.
 - `examples/mcp-client.http.json`: HTTP MCP client example.
 - `docs/systemd/anigate.service`: optional user-level systemd service.

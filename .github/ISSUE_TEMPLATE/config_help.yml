@@ -1,0 +1,47 @@
+name: Setup or config help
+description: Ask for help installing or configuring AniGate.
+title: "[Config]: "
+labels: ["question"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: AniGate version
+      placeholder: "0.1.2"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Install method
+      options:
+        - scripts/install.sh
+        - release binary
+        - go run
+        - local build
+        - other
+    validations:
+      required: true
+  - type: dropdown
+    id: transport
+    attributes:
+      label: Transport
+      options:
+        - stdio
+        - HTTP
+        - not sure
+    validations:
+      required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What are you trying to configure?
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Redacted config
+      description: Remove tokens, private paths if needed, and private remote URLs.
+      render: json

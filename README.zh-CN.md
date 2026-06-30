@@ -2,6 +2,10 @@
 
 版本：`0.1.2`（`semver`）
 
+[![CI](https://github.com/Lorlds/AniGate/actions/workflows/ci.yml/badge.svg)](https://github.com/Lorlds/AniGate/actions/workflows/ci.yml)
+[![Latest Release](https://img.shields.io/github/v/release/Lorlds/AniGate?label=release)](https://github.com/Lorlds/AniGate/releases/latest)
+[![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue)](LICENSE)
+
 [English README](README.md)
 
 AniGate 是一个受控 MCP 网关，用来让 ChatGPT Web 或其他 MCP client 安全地使用一台远程 Linux 机器。它不是裸 shell，也不是单纯的 agent wrapper；每个能力都必须是配置允许的、有边界的、可审计的 MCP tool。
@@ -201,3 +205,5 @@ handoff：
 - `docs/user-quickstart.md`：普通用户快速开始。
 - `docs/design.md`：设计边界和安全模型。
 - `docs/openai-mcp-notes.md`：OpenAI MCP 相关笔记。
+- `CONTRIBUTING.md`：贡献流程和本地验证。
+- `SECURITY.md`：安全问题上报方式。
