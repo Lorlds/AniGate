@@ -1,4 +1,6 @@
 /anigate
 /.anigate/
+/bin/
+/dist/
 *.test
 coverage.out

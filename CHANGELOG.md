@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.2
+
+- Added beginner-friendly install and verification scripts.
+- Added `Makefile` targets for build, install, test, race, and verification.
+- Added Chinese README and a step-by-step user quickstart.
+- Added stdio and HTTP MCP client configuration examples.
+- Added a user-level systemd service example.
+- Added GitHub Actions CI and tag-based release binary publishing.
+- Updated the example `sandboxes` workspace path for the new repository
+  location so it still points at `/home/lorald/sandboxes`.
+
 ## 0.1.1
 
 - Added PolyForm Noncommercial License 1.0.0 and documented AniGate as

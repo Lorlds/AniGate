@@ -1,6 +1,8 @@
 # AniGate
 
-Version: `0.1.1` (`semver`)
+Version: `0.1.2` (`semver`)
+
+[中文 README](README.zh-CN.md)
 
 AniGate is a controlled MCP gateway from ChatGPT Web to remote Linux. It is not
 a raw shell and it is not just an agent wrapper: every capability is an
@@ -87,21 +89,61 @@ events to an AniMonitor webhook.
 
 ## Quick Start
 
+Install to `~/.local/bin/anigate` and generate a user config:
+
 ```bash
-cd /path/to/AniGate
-go test ./...
-go run ./cmd/anigate version
-go run ./cmd/anigate stdio --config configs/anigate.example.json
+git clone https://github.com/Lorlds/AniGate.git
+cd AniGate
+./scripts/install.sh
+```
+
+The installer writes a local config to:
+
+```text
+~/.config/anigate/anigate.json
+```
+
+Run a local HTTP MCP server:
+
+```bash
+~/.local/bin/anigate http --addr 127.0.0.1:8787 --config ~/.config/anigate/anigate.json
+```
+
+Or run stdio mode for a local MCP client:
+
+```bash
+~/.local/bin/anigate stdio --config ~/.config/anigate/anigate.json
+```
+
+Developer checkout:
+
+```bash
+make verify
+make build
+./bin/anigate version
+./bin/anigate stdio --config configs/anigate.example.json
 ```
 
 HTTP mode:
 
 ```bash
-go run ./cmd/anigate http --addr 127.0.0.1:8787 --config configs/anigate.example.json
+./bin/anigate http --addr 127.0.0.1:8787 --config configs/anigate.example.json
 ```
 
 Then POST JSON-RPC requests to `http://127.0.0.1:8787/mcp`. For ChatGPT Web,
 expose the MCP endpoint with HTTPS or OpenAI Secure MCP Tunnel.
+
+Useful files for new users:
+
+- `README.zh-CN.md`: Chinese quick start and safety notes.
+- `docs/user-quickstart.md`: step-by-step setup.
+- `examples/mcp-client.stdio.json`: local stdio MCP client example.
+- `examples/mcp-client.http.json`: HTTP MCP client example.
+- `docs/systemd/anigate.service`: optional user-level systemd service.
+- `scripts/verify.sh`: local test/build/smoke verification.
+- `scripts/install.sh`: local install and config generation.
+
+Release binaries are built by GitHub Actions for `v*` tags.
 
 ## Configuration
 
